@@ -2,7 +2,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
 from django.http import Http404
-from django.urls import set_urlconf, clear_url_caches
+from django.urls import set_urlconf, clear_url_caches, get_script_prefix
 from django_tenants.middleware import TenantMainMiddleware
 from django_tenants.urlresolvers import get_subfolder_urlconf
 from django_tenants.utils import (
@@ -46,7 +46,13 @@ class TenantSubfolderMiddleware(TenantMainMiddleware):
         subfolder_prefix_path = "/{}/".format(get_subfolder_prefix())
 
         # We are in the public tenant
-        if not request.path.startswith(subfolder_prefix_path):
+        script_prefix = get_script_prefix().rstrip("/")
+        if script_prefix == "":
+            path = request.path
+        else:
+            path = request.path.partition(script_prefix)[2]
+
+        if not path.startswith(subfolder_prefix_path):
             try:
                 tenant = tenant_model.objects.get(schema_name=get_public_schema_name())
             except tenant_model.DoesNotExist:
@@ -56,7 +62,7 @@ class TenantSubfolderMiddleware(TenantMainMiddleware):
 
         # We are in a specific tenant
         else:
-            path_chunks = request.path[len(subfolder_prefix_path):].split("/")
+            path_chunks = path[len(subfolder_prefix_path):].split("/")
             tenant_subfolder = path_chunks[0]
             try:
                 tenant = self.get_tenant(domain_model=domain_model, hostname=tenant_subfolder)
